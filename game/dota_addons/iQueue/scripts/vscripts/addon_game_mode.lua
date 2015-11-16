@@ -3,6 +3,7 @@
 
 -- Needed to communicate with the iQueue.lua file
 require('iQueue')
+require('libraries\EntityManager')
 
 
 
