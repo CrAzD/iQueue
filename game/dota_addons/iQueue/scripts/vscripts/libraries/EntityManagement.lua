@@ -6,7 +6,7 @@ if EntityManagement == nil then
 end
 
 
-EntityManagement['version'] = '0.008'
+EntityManagement['version'] = '0.010'
 EntityManagement['github'] = 'https://github.com/CrAzD/DotaEntityManager'
 EntityManagement['description'] = 'An entity management library.'
 print('\n\tEntityManagement:  '..EntityManagement['description']..'\n\t\tVersion:  '..EntityManagement['version']..'\n\t\tGithub URL:  '..EntityManagement['github']..'\n\t\tLibrary Initialized.\n')
@@ -73,8 +73,8 @@ function EntityManagement:CreateEntity(entity, player)
 		print('[ENTITY MANAGEMENT]  entity[\'type\'] is either missing or not an string.')
 
 		return(nil)
-	elseif type(entity['handle']) ~= 'table' then
-		print('[ENTITY MANAGEMENT]  entity[\'handle\'] is either missing or not a table.')
+	elseif type(entity['handleOwnerEntity']) ~= 'table' then
+		print('[ENTITY MANAGEMENT]  entity[\'handleOwnerEntity\'] is either missing or not a table.')
 
 		return(nil)
 	elseif type(entity['team']) ~= 'integer' then
@@ -82,14 +82,7 @@ function EntityManagement:CreateEntity(entity, player)
 
 		return(nil)
 	else
-		if string.find(entity['type'], 'unit') then
-			local unit = CreateUnitByName(entity['name'], entity['spawnCords'], true, entity['handle'], player, entity['team'])
-
-			unit['owners'] = {['entity'] = entity['handle'], ['player'] = player}
-			unit['unitType'] = entity['type']
-
-			return(EntityManagement:EntityConfiguration(unit, player))	
-		elseif string.find(entity['type'], 'dummy') then
+		if string.find(entity['type'], 'dummy') then
 			return(CreateUnitByName(entity['name'], entity['spawnCords'], false, player['handle'], player, entity['team']))		
 		elseif string.find(entity['type'], 'tavern') then
 			local unit = CreateUnitByName(entity['name'], entity['spawnCords'], true, player['handle'], player, entity['team'])
@@ -97,16 +90,22 @@ function EntityManagement:CreateEntity(entity, player)
 
 			if entity['team'] == 2 then
 				for i=0, (GameMode.BUILDER_COUNT - 1) do
-					unit:AddAbility(GameMode.BUILDER_SELECTION_ABILITY_LIST[i])
-					unit:FindAbilityByName(GameMode.BUILDER_SELECTION_ABILITY_LIST[i]):SetLevel(1)
+					EntityManagement:AbilityAdd(unit, GameMode.BUILDER_SELECTION_ABILITY_LIST[i])
 				end
 			else
-				unit:AddAbility('pick_titan_moltenious')
-				unit:FindAbilityByName('pick_titan_moltenious'):SetLevel(1)
+				EntityManagement:AbilityAdd(unit, 'pick_titan_moltenious')
 			end
 
 			return(unit)
+		if string.find(entity['type'], 'unit') then
+			local unit = CreateUnitByName(entity['name'], entity['spawnCords'], true, entity['handleOwnerEntity'], player, entity['team'])
 
+			unit['name'] = entity['name']
+			unit['team'] = entity['team']
+			unit['owners'] = {['entity'] = entity['handleOwnerEntity'], ['player'] = player}
+			unit['unitType'] = entity['type']
+
+			return(EntityManagement:EntityConfiguration(unit, player))	
 		else
 			print('\n\nERROR: unitType argument error. \n\tunitType is invalid. Make sure your spelling is correct, if so make sure you have a check for that unitType. \n\tAlso, you can combine unit types together. \n\tExamples: \n\t\t\'unit\' \n\t\t\'unitpeasant\' or \'unit-peasant\' \n\t\t\'unithero\' or \'unit hero\' \n\t\t\'unit-building\'')
 
@@ -174,6 +173,12 @@ function EntityManagement:EntityConfiguration(entity, player)
 	if string.find(entity['unitType'], 'building') then
 		entity['isBuilding'] = true
 		entity['construction'] = {}
+
+		entity:SetModelScale(0.5)
+
+		if FindUnitLabel(entity, 'CanQueue') then
+			BuildingQueue:InitializeBuildingEntity(entity)
+		end
 	end
 
 	if string.find(entity['unitType'], 'peasant') then
@@ -191,8 +196,8 @@ function EntityManagement:EntityConfiguration(entity, player)
 	entity:SetControllableByPlayer(entity['id'], true)
 
 	if type(player['entities']) == 'table' then
-		entity['positionInPlayerEntityList'] = #player['entities']
-		player['entities'][entity['positionInPlayerEntityList']] = entity
+		entity['positionInPlayerEntityList'] = #player['entities'] + 1
+		player.entities[entity['positionInPlayerEntityList']] = entity
 	end
 
 	entity['isConfigured'] = true
@@ -211,8 +216,10 @@ function EntityManagement:EntityDestroy(entity)
 
 		return(false)
 	else
+		player.entities[entity['positionInPlayerEntityList']] = nil
 		entity:Destroy()
-		entity.owners.player.entities['positionInPlayerEntityList'] = nil
+
+		return(true)
 	end
 end
 
@@ -367,7 +374,7 @@ function EntityManagement:SetupPlayer(playerID)
 		return(player)
 	else
 		player['id'] = playerID
-		player['queue'] = {}
+		player['entities'] = {}
 		player['units'] = {}
 		player['structures'] = {}
 		player['buildings'] = {}
